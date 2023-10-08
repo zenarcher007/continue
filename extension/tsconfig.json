@@ -3,14 +3,7 @@
     "module": "commonjs",
     "target": "ES2020",
     "outDir": "out/tsc/src",
-    "lib": [
-      "ES2020",
-      "dom",
-      "es6",
-      "es5",
-      "dom.iterable",
-      "scripthost"
-    ],
+    "lib": ["ES2020", "dom", "es6", "es5", "dom.iterable", "scripthost"],
     "sourceMap": true,
     "rootDir": "src",
     "strict": true /* enable all strict type-checking options */,
@@ -21,7 +14,5 @@
     "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules via creation of namespace objects for all imports. Implies 'allowSyntheticDefaultImports'. */,
     "resolveJsonModule": true /* Enable importing .json files */
   },
-  "include": [
-    "src/**/*",
-  ]
+  "include": ["src/**/*", "vscode.proposed.editorInsets.d.ts"]
 }

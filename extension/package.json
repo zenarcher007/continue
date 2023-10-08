@@ -99,9 +99,29 @@
         "command": "continue.debugTerminal",
         "category": "Continue",
         "title": "Debug Terminal"
+      },
+      {
+        "command": "continue.inlineChat",
+        "category": "Continue",
+        "title": "Continue Inline Chat"
+      },
+      {
+        "command": "continue.escapeEditorInsets",
+        "category": "Continue",
+        "title": "Continue Escape Editor Insets"
       }
     ],
     "keybindings": [
+      {
+        "key": "escape",
+        "command": "continue.escapeEditorInsets",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "continue.inlineChat",
+        "mac": "cmd+shift+i",
+        "key": "ctrl+shift+i"
+      },
       {
         "command": "continue.focusContinueInput",
         "mac": "cmd+m",
@@ -261,5 +281,8 @@
   },
   "optionalDependencies": {
     "@esbuild/android-arm": "^0.18.17"
-  }
+  },
+  "enabledApiProposals": [
+    "editorInsets"
+  ]
 }

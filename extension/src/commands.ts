@@ -114,7 +114,162 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
       type: "openSettings",
     });
   },
+
+  "continue.inlineChat": () => {
+    let editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+
+    const fsPath = editor.document.uri.fsPath;
+
+    if (fsPath in currentEditorInsets) {
+      currentEditorInsets[fsPath].editorInset.dispose();
+      delete currentEditorInsets[fsPath];
+    }
+
+    const selection = editor.selection;
+    let topOfSelection = selection.start.line
+
+    const editorInset = vscode.window.createWebviewTextEditorInset(
+      editor,
+      topOfSelection - 1,
+      3,
+      {
+        enableScripts: true,
+        enableCommandUris: true,
+      }
+    );
+    editorInset.webview.html = `<!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <title>Continue</title>
+
+        <style>
+
+        #input-div {
+          padding-top: 8px;
+          padding-bottom: 8px;
+          border-radius: 5px;
+          color: white;
+          font-family: sans-serif;
+          height: 100%;
+        }
+        
+        #input-textarea {
+          background-color: #3e3e3e;
+          padding: 4px 8px;
+          border-radius: 5px;
+          color: white;
+          font-family: sans-serif;
+          resize: none;
+          width: 400px;
+          outline: none;
+          margin-left: 2px;
+          
+          :focus {
+            border: 0.5px solid gray;
+          }
+        }
+
+        </style>
+
+        <script>const vscode = acquireVsCodeApi();</script>
+      </head>
+      <body>
+        <div id="input-div">
+          <textarea id="input-textarea" placeholder="Enter input"></textarea>
+        </div>
+
+        <script>
+          const textArea = document.getElementById('input-textarea');
+
+          textArea.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault(); // Prevent the newline character from being inserted
+              const textValue = textArea.value;
+              console.log('Text Area Value:', textValue);
+
+              vscode.postMessage({
+                type: 'input',
+                input: textValue
+              });
+            }
+          });
+
+          textArea.addEventListener('onchange', (event) => {
+            textArea.style.height = 'auto';
+            textArea.style.height = textArea.scrollHeight + 'px';
+            vscode.postMessage({
+              type: 'resize',
+              height: textArea.scrollHeight
+            });
+          });
+
+          textArea.focus();
+
+          // Listen for escape key
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+              vscode.postMessage({
+                type: 'escape'
+              });
+            }
+          });
+        </script>
+      </body>
+    </html>`;
+
+    currentEditorInsets[editor.document.uri.fsPath] = {
+      editorInset,
+      selection: selection,
+    }
+
+    editorInset.webview.onDidReceiveMessage((message) => {
+      if (!editor) return
+      if (message.type === 'input') {
+        ideProtocolClient?.sendHighlightedCode(
+          [
+            {
+              filepath: editor.document.uri.fsPath,
+              contents: editor.document.getText(new vscode.Range(selection.start, selection.end)),
+              range: {
+                start: {
+                  line: selection.start.line,
+                  character: selection.start.character,
+                },
+                end: {
+                  line: selection.end.line,
+                  character: selection.end.character,
+                },
+              },
+            },
+          ],
+          true
+        );
+        ideProtocolClient.sendMainUserInput("/edit " + message.input);
+      } else if (message.type === 'resize') {
+        (editorInset as any).height = message.height
+      } else if (message.type === 'escape') {
+        editorInset.dispose()
+        delete currentEditorInsets[editor.document.uri.fsPath]
+      }
+    })
+  },
+  "continue.escapeEditorInsets": () => {
+    const currentEditor = vscode.window.activeTextEditor;
+    if (!currentEditor) return;
+
+    currentEditorInsets[currentEditor.document.uri.fsPath]?.editorInset.dispose()
+  }
 };
+
+interface EditorInsetInfo {
+  editorInset: vscode.WebviewEditorInset;
+  selection: vscode.Selection;
+}
+let currentEditorInsets: {[filepath: string]: EditorInsetInfo} = {};
 
 export function registerAllCommands(context: vscode.ExtensionContext) {
   for (const [command, callback] of Object.entries(commandsMap)) {

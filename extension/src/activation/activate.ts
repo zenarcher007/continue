@@ -6,10 +6,13 @@ import {
   getExtensionVersion,
   startContinuePythonServer,
 } from "./environmentSetup";
-import fetch from "node-fetch";
 import { registerAllCodeLensProviders } from "../lang-server/codeLens";
 import { registerAllCommands } from "../commands";
 import registerQuickFixProvider from "../lang-server/codeActions";
+import path from "path";
+import os from "os";
+import fs from "fs";
+import { getExtensionUri } from "../util/vscode";
 
 const PACKAGE_JSON_RAW_GITHUB_URL =
   "https://raw.githubusercontent.com/continuedev/continue/HEAD/extension/package.json";
@@ -72,6 +75,44 @@ export async function activateExtension(context: vscode.ExtensionContext) {
   registerAllCommands(context);
   registerQuickFixProvider();
   addPythonPathForConfig();
+
+  const vscodeInsidersDir = path.join(os.homedir(), '.vscode-insiders');
+  const argvJsonPath = path.join(vscodeInsidersDir, 'argv.json');
+
+  try {
+    if (fs.existsSync(argvJsonPath)) {
+      const fileContents = fs.readFileSync(argvJsonPath, 'utf8');
+      const lines = [];
+      for (const line of fileContents.split("\n")) {
+        if (line.trimStart().startsWith("//")) {
+          continue;
+        }
+        lines.push(line);
+      }
+      const argvData = JSON.parse(lines.join("\n"));
+
+      if (!argvData['enable-proposed-api']) {
+        argvData['enable-proposed-api'] = ['Continue.continue'];
+      } else if (!argvData['enable-proposed-api'].includes('Continue.continue')) {
+        argvData['enable-proposed-api'].push('Continue.continue');
+      }
+
+      fs.writeFileSync(argvJsonPath, JSON.stringify(argvData, null, 2), 'utf8');
+    }
+  } catch (e) {}
+
+  try {
+    const packageJsonPath = path.join(getExtensionUri().fsPath, "package.json");
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      
+      if (!packageJson["enabledApiProposals"]) {
+        packageJson["enabledApiProposals"] = ["editorInsets"];
+        fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2), 'utf8');
+        vscode.commands.executeCommand("workbench.action.reloadWindow");
+      }
+    }
+  } catch(e) {}
 
   // Start the server
   const sessionIdPromise = (async () => {
