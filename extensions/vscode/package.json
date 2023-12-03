@@ -129,9 +129,29 @@
         "command": "continue.selectFilesAsContext",
         "category": "Continue",
         "title": "Continue: Select Files as Context"
+      },
+      {
+        "command": "continue.type",
+        "category": "Continue",
+        "title": "Continue: Type"
+      },
+      {
+        "command": "clearInlineEdit",
+        "category": "Continue",
+        "title": "Clear Inline Edit"
       }
     ],
     "keybindings": [
+      {
+        "command": "continue.clearInlineEdit",
+        "mac": "Escape",
+        "key": "Escape"
+      },
+      {
+        "command": "continue.type",
+        "mac": "cmd+shift+j",
+        "key": "ctrl+shift+j"
+      },
       {
         "command": "continue.focusContinueInput",
         "mac": "cmd+m",

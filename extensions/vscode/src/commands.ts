@@ -76,7 +76,13 @@ async function addEntireFileToContext(filepath: vscode.Uri, edit: boolean) {
 
 // Copy everything over from extension.ts
 const commandsMap: { [command: string]: (...args: any) => any } = {
-  "continue.acceptDiff": acceptDiffCommand,
+  "continue.acceptDiff": (...args) => {
+    if (inlineEditManager.count() > 0) {
+      inlineEditManager.enter();
+    } else {
+      acceptDiffCommand(...args);
+    }
+  },
   "continue.rejectDiff": rejectDiffCommand,
   "continue.quickFix": async (message: string, code: string, edit: boolean) => {
     ideProtocolClient.sendMainUserInput(
@@ -252,7 +258,141 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
       `/references ${filepath.fsPath} ${position.line} ${position.character}`
     );
   },
+  "continue.type": async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+    const previousFileContents = editor.document.getText();
+
+    // Highlight the selected range with a decoration
+    const originalRange = editor.selection;
+    const highlightDecorationType =
+      vscode.window.createTextEditorDecorationType({
+        backgroundColor: "#0f02",
+      });
+    editor.setDecorations(highlightDecorationType, [originalRange]);
+
+    // Select as context item
+    addHighlightedCodeToContext(true);
+
+    // Add a `` and insert the cursor in the middle
+    const startOfLine = new vscode.Position(editor.selection.start.line, 0);
+    editor.edit((editBuilder) => {
+      editBuilder.insert(startOfLine, "`\n\n`;\n");
+    });
+    let position = startOfLine.translate(1, 0);
+    editor.selection = new vscode.Selection(position, position);
+
+    // Add text via a decoration
+    const decorationType = vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: "⌘ ⇧ ⏎ to edit, esc to cancel",
+        margin: "0 0 0 1em",
+        color: "#8888",
+      },
+      // border: "solid 1px #888",
+      backgroundColor: "#eee2",
+      // borderRadius: "2em",
+      isWholeLine: true,
+      fontStyle: "italic",
+    });
+
+    editor.setDecorations(decorationType, [
+      new vscode.Range(position.translate(-1, 0), position.translate(1, 0)),
+    ]);
+
+    inlineEditManager.add({
+      startLine: position.line - 1,
+      decorationType,
+      editor,
+      highlightDecorationType,
+      previousFileContents,
+    });
+  },
+  "continue.clearInlineEdit": () => {
+    inlineEditManager.removeAll();
+  },
 };
+
+interface InlineEdit {
+  startLine: number;
+  decorationType: vscode.TextEditorDecorationType;
+  highlightDecorationType: vscode.TextEditorDecorationType;
+  editor: vscode.TextEditor;
+  previousFileContents: string;
+}
+
+// Only allow one per editor
+class InlineEditManager {
+  private edits: InlineEdit[] = [];
+
+  add(inlineEdit: InlineEdit) {
+    this.edits.push(inlineEdit);
+  }
+
+  count() {
+    return this.edits.length;
+  }
+
+  private findRange(inlineEdit: InlineEdit) {
+    const startPos = new vscode.Position(inlineEdit.startLine, 0);
+
+    // Find the end line
+    let endPos = startPos;
+    while (
+      endPos.line < inlineEdit.editor.document.lineCount &&
+      inlineEdit.editor.document.lineAt(endPos.line).text !== "`;"
+    ) {
+      endPos = endPos.translate(1, 0);
+    }
+    endPos = endPos.translate(1, 0);
+
+    return new vscode.Range(startPos, endPos);
+  }
+
+  async enter() {
+    const edit = this.edits[0];
+
+    // Get the text
+    const fullRange = this.findRange(edit);
+    const range = new vscode.Range(
+      fullRange.start.translate(1, 0),
+      fullRange.end.translate(-1, 0)
+    );
+    const text = edit.editor.document.getText(range).trim();
+    ideProtocolClient.sendMainUserInput("/edit " + text);
+
+    this.removeAll();
+  }
+
+  private remove(inlineEdit: InlineEdit) {
+    this.edits = this.edits.filter((edit) => edit !== inlineEdit);
+    inlineEdit.editor.setDecorations(inlineEdit.decorationType, []);
+    inlineEdit.editor.setDecorations(inlineEdit.highlightDecorationType, []);
+
+    // Remove the inserted text
+    inlineEdit.editor.edit((editBuilder) => {
+      editBuilder.delete(this.findRange(inlineEdit));
+    });
+
+    // If the file contents are the same as original, save the file, because it's annoying to have to save it manually
+    setTimeout(() => {
+      const fileContents = inlineEdit.editor.document.getText();
+      if (fileContents === inlineEdit.previousFileContents) {
+        inlineEdit.editor.document.save();
+      }
+    }, 100);
+  }
+
+  removeAll() {
+    for (const edit of this.edits) {
+      this.remove(edit);
+    }
+  }
+}
+
+const inlineEditManager = new InlineEditManager();
 
 export function registerAllCommands(context: vscode.ExtensionContext) {
   for (const [command, callback] of Object.entries(commandsMap)) {
