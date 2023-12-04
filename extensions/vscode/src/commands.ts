@@ -289,7 +289,7 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
     editor.selection = new vscode.Selection(position, position);
 
     // Add text via a decoration
-    const decorationType = createSvgDecorationType("box.svg");
+    const decorationType = createSvgDecorationType(1, true);
     decorationTypes.push(decorationType);
     editor.setDecorations(decorationType, [
       new vscode.Range(position.translate(-1, 0), position.translate(0, 0)),
@@ -374,6 +374,7 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
         previousFileContents,
         disposables,
         lineCount: 1,
+        focused: true,
       });
     }, 100);
   },
@@ -382,13 +383,24 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
   },
 };
 
-function createSvgDecorationType(img: string) {
+function createSvgDecorationType(lineCount: number, focused: boolean) {
+  if (lineCount > 2) {
+    lineCount = 2;
+  } else if (lineCount < 1) {
+    lineCount = 1;
+  }
   return vscode.window.createTextEditorDecorationType({
     before: {
       margin: "0 0 0 0px",
       // contentText: "",
       contentIconPath: vscode.Uri.file(
-        path.join(__dirname, "..", "media", img)
+        path.join(
+          __dirname,
+          "..",
+          "media",
+          "boxes",
+          `box${lineCount}${focused ? "_focus" : ""}.svg`
+        )
       ),
     },
     // border: "solid 1px #888",
@@ -408,11 +420,28 @@ interface InlineEdit {
   previousFileContents: string;
   disposables: vscode.Disposable[];
   lineCount: number;
+  focused: boolean;
 }
 
 // Only allow one per editor
 class InlineEditManager {
   private edits: InlineEdit[] = [];
+
+  updateSvgDecorationType(
+    inlineEdit: InlineEdit,
+    lineCount: number,
+    focused: boolean
+  ) {
+    inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], []);
+    const range = this.findRange(inlineEdit);
+    inlineEdit.decorationTypes[1] = createSvgDecorationType(lineCount, focused);
+    inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], [
+      new vscode.Range(range.start, range.start.translate(lineCount, 0)),
+    ]);
+
+    inlineEdit.lineCount = lineCount;
+    inlineEdit.focused = focused;
+  }
 
   add(inlineEdit: InlineEdit) {
     this.edits.push(inlineEdit);
@@ -427,37 +456,15 @@ class InlineEditManager {
       const lineCount = range.end.line - range.start.line - 2;
 
       if (lineCount !== inlineEdit.lineCount) {
-        let imgName = "box.svg";
-        switch (lineCount) {
-          case 0:
-          case 1:
-            imgName = "box.svg";
-            break;
-          case 2:
-            imgName = "box2.svg";
-            break;
-          default:
-            // Use the tallest existing box
-            imgName = "box2.svg";
-            break;
-        }
-
         // Update the decoration
-        inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], []);
-
-        inlineEdit.decorationTypes[1] = createSvgDecorationType(imgName);
-        inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], [
-          new vscode.Range(range.start, range.start.translate(lineCount, 0)),
-        ]);
-
-        inlineEdit.lineCount = lineCount;
+        this.updateSvgDecorationType(inlineEdit, lineCount, true);
       }
     });
 
     inlineEdit.disposables.push(lineCountListener);
 
-    // Add listener for when the user puts their cursor on a boundary line (and move back to middle)
     const cursorListener = vscode.window.onDidChangeTextEditorSelection((e) => {
+      // Add listener for when the user puts their cursor on a boundary line (and move back to middle)
       if (e.textEditor !== inlineEdit.editor) {
         return;
       }
@@ -471,6 +478,12 @@ class InlineEditManager {
         // Move the cursor back to the middle
         const position = range.start.translate(1, 2);
         inlineEdit.editor.selection = new vscode.Selection(position, position);
+      }
+
+      // Also listen for when the box is focused / blurred
+      const focused = this.findRange(inlineEdit).contains(selection.active);
+      if (focused !== inlineEdit.focused) {
+        this.updateSvgDecorationType(inlineEdit, inlineEdit.lineCount, focused);
       }
     });
 
