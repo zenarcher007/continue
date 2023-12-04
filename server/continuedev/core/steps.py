@@ -386,6 +386,8 @@ Please output the code to be inserted at the cursor in order to fulfill the user
     ) -> AsyncGenerator[SetStep, None]:
         await sdk.ide.saveFile(rif.filepath)
         full_file_contents = await sdk.ide.readFile(rif.filepath)
+        # Send initial diff just to open the side-by-side
+        await sdk.ide.showDiff(rif.filepath, full_file_contents, len(sdk.history) - 1)
 
         (
             file_prefix,

@@ -269,7 +269,8 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
     const originalRange = editor.selection;
     const highlightDecorationType =
       vscode.window.createTextEditorDecorationType({
-        backgroundColor: "#0f02",
+        backgroundColor: "#6f62",
+        isWholeLine: true,
       });
     editor.setDecorations(highlightDecorationType, [originalRange]);
 
@@ -286,29 +287,80 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
 
     // Add text via a decoration
     const decorationType = vscode.window.createTextEditorDecorationType({
+      before: {
+        margin: "0 0 0 -1000px",
+        contentText: "",
+      },
       after: {
         contentText: "⌘ ⇧ ⏎ to edit, esc to cancel",
-        margin: "0 0 0 1em",
+        margin: "0 0 0 -1000px",
         color: "#8888",
       },
       // border: "solid 1px #888",
       backgroundColor: "#eee2",
       // borderRadius: "2em",
       isWholeLine: true,
-      fontStyle: "italic",
+      color: "white",
+      cursor: "pointer",
     });
 
     editor.setDecorations(decorationType, [
       new vscode.Range(position.translate(-1, 0), position.translate(1, 0)),
     ]);
 
-    inlineEditManager.add({
-      startLine: position.line - 1,
-      decorationType,
-      editor,
-      highlightDecorationType,
-      previousFileContents,
-    });
+    const startLine = position.line - 1;
+
+    // Add a listener to revert any edits made to the boundary lines
+    // Timeout so the initial creation of the zone isn't counted
+    setTimeout(() => {
+      const editListener = vscode.workspace.onDidChangeTextDocument((e) => {
+        if (e.document !== editor.document) {
+          return;
+        }
+
+        for (const change of e.contentChanges) {
+          // The editBuilder.replace will trigger another onDidChangeTextDocument event, so we need to filter these out
+          // False positives are okay
+          if (change.text === "`" || change.text === "`;") {
+            continue;
+          }
+
+          // Check if the boundary line is included in the edit at all
+          const start = change.range.start;
+          const end = change.range.end;
+          if (start.line <= startLine && end.line >= startLine) {
+            // Revert the start line to its original state
+            editor.edit((editBuilder) => {
+              editBuilder.replace(
+                new vscode.Range(startLine, 0, startLine, 1000),
+                "`"
+              );
+            });
+          }
+
+          // TODO: Need to truly keep track of the endline and startline, because they BOTH could move (just more often a problem with the endline)
+          // if (start.line <= endLine && end.line >= endLine) {
+          //   // Revert the end line to its original state
+          //   editor.edit((editBuilder) => {
+          //     editBuilder.replace(
+          //       new vscode.Range(endLine, 0, endLine, 1000),
+          //       "`;"
+          //     );
+          //   });
+          // }
+        }
+      });
+      const disposables = [editListener];
+
+      inlineEditManager.add({
+        startLine,
+        decorationType,
+        editor,
+        highlightDecorationType,
+        previousFileContents,
+        disposables,
+      });
+    }, 100);
   },
   "continue.clearInlineEdit": () => {
     inlineEditManager.removeAll();
@@ -321,6 +373,7 @@ interface InlineEdit {
   highlightDecorationType: vscode.TextEditorDecorationType;
   editor: vscode.TextEditor;
   previousFileContents: string;
+  disposables: vscode.Disposable[];
 }
 
 // Only allow one per editor
@@ -383,6 +436,11 @@ class InlineEditManager {
         inlineEdit.editor.document.save();
       }
     }, 100);
+
+    // Dispose of the listeners
+    for (const disposable of inlineEdit.disposables) {
+      disposable.dispose();
+    }
   }
 
   removeAll() {
