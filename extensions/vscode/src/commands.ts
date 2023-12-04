@@ -269,10 +269,13 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
     const originalRange = editor.selection;
     const highlightDecorationType =
       vscode.window.createTextEditorDecorationType({
-        backgroundColor: "#6f62",
+        backgroundColor: "#eee2",
         isWholeLine: true,
       });
-    editor.setDecorations(highlightDecorationType, [originalRange]);
+    if (!editor.selection.isEmpty) {
+      editor.setDecorations(highlightDecorationType, [originalRange]);
+    }
+    const decorationTypes = [highlightDecorationType];
 
     // Select as context item
     addHighlightedCodeToContext(true);
@@ -280,32 +283,35 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
     // Add a `` and insert the cursor in the middle
     const startOfLine = new vscode.Position(editor.selection.start.line, 0);
     editor.edit((editBuilder) => {
-      editBuilder.insert(startOfLine, "`\n\n`;\n");
+      editBuilder.insert(startOfLine, "`\n  \n`;\n");
     });
-    let position = startOfLine.translate(1, 0);
+    let position = startOfLine.translate(1, 2);
     editor.selection = new vscode.Selection(position, position);
 
     // Add text via a decoration
-    const decorationType = vscode.window.createTextEditorDecorationType({
+    const decorationType = createSvgDecorationType("box.svg");
+    decorationTypes.push(decorationType);
+    editor.setDecorations(decorationType, [
+      new vscode.Range(position.translate(-1, 0), position.translate(0, 0)),
+    ]);
+
+    const endLineDecorationType = vscode.window.createTextEditorDecorationType({
       before: {
-        margin: "0 0 0 -1000px",
-        contentText: "",
-      },
-      after: {
-        contentText: "⌘ ⇧ ⏎ to edit, esc to cancel",
-        margin: "0 0 0 -1000px",
+        // contentText: "⌘ ⇧ ⏎ to edit, esc to cancel",
+        // contentIconPath: vscode.Uri.file(
+        //   path.join(__dirname, "..", "media", "test.svg")
+        // ),
+        margin: "0 0 4em 0",
         color: "#8888",
       },
-      // border: "solid 1px #888",
-      backgroundColor: "#eee2",
-      // borderRadius: "2em",
+      // backgroundColor: "#eee2",
       isWholeLine: true,
-      color: "white",
-      cursor: "pointer",
+      color: "transparent",
+      cursor: "default",
     });
-
-    editor.setDecorations(decorationType, [
-      new vscode.Range(position.translate(-1, 0), position.translate(1, 0)),
+    decorationTypes.push(endLineDecorationType);
+    editor.setDecorations(endLineDecorationType, [
+      new vscode.Range(position.translate(1, 0), position.translate(1, 0)),
     ]);
 
     const startLine = position.line - 1;
@@ -349,16 +355,25 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
           //   });
           // }
         }
+        const contentsOfFirstLine = editor.document.lineAt(startLine + 1).text;
+        if (contentsOfFirstLine === "" || contentsOfFirstLine === " ") {
+          // If the space was removed from the start of the line, put it back
+          editor.edit((editBuilder) => {
+            editBuilder.insert(new vscode.Position(startLine + 1, 0), "  ");
+          });
+        }
       });
+
       const disposables = [editListener];
 
       inlineEditManager.add({
         startLine,
-        decorationType,
+        decorationTypes,
         editor,
         highlightDecorationType,
         previousFileContents,
         disposables,
+        lineCount: 1,
       });
     }, 100);
   },
@@ -367,13 +382,32 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
   },
 };
 
+function createSvgDecorationType(img: string) {
+  return vscode.window.createTextEditorDecorationType({
+    before: {
+      margin: "0 0 0 0px",
+      // contentText: "",
+      contentIconPath: vscode.Uri.file(
+        path.join(__dirname, "..", "media", img)
+      ),
+    },
+    // border: "solid 1px #888",
+    // backgroundColor: "#eee2",
+    // borderRadius: "2em",
+    isWholeLine: true,
+    color: "#ddd",
+    fontWeight: "light",
+  });
+}
+
 interface InlineEdit {
   startLine: number;
-  decorationType: vscode.TextEditorDecorationType;
+  decorationTypes: vscode.TextEditorDecorationType[];
   highlightDecorationType: vscode.TextEditorDecorationType;
   editor: vscode.TextEditor;
   previousFileContents: string;
   disposables: vscode.Disposable[];
+  lineCount: number;
 }
 
 // Only allow one per editor
@@ -382,6 +416,65 @@ class InlineEditManager {
 
   add(inlineEdit: InlineEdit) {
     this.edits.push(inlineEdit);
+
+    // Add listener for when number of lines changes
+    const lineCountListener = vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.document !== inlineEdit.editor.document) {
+        return;
+      }
+
+      const range = this.findRange(inlineEdit);
+      const lineCount = range.end.line - range.start.line - 2;
+
+      if (lineCount !== inlineEdit.lineCount) {
+        let imgName = "box.svg";
+        switch (lineCount) {
+          case 0:
+          case 1:
+            imgName = "box.svg";
+            break;
+          case 2:
+            imgName = "box2.svg";
+            break;
+          default:
+            // Use the tallest existing box
+            imgName = "box2.svg";
+            break;
+        }
+
+        // Update the decoration
+        inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], []);
+
+        inlineEdit.decorationTypes[1] = createSvgDecorationType(imgName);
+        inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], [
+          new vscode.Range(range.start, range.start.translate(lineCount, 0)),
+        ]);
+
+        inlineEdit.lineCount = lineCount;
+      }
+    });
+
+    inlineEdit.disposables.push(lineCountListener);
+
+    // Add listener for when the user puts their cursor on a boundary line (and move back to middle)
+    const cursorListener = vscode.window.onDidChangeTextEditorSelection((e) => {
+      if (e.textEditor !== inlineEdit.editor) {
+        return;
+      }
+
+      const selection = e.selections[0];
+      const range = this.findRange(inlineEdit);
+      if (
+        selection.active.line === range.start.line ||
+        selection.active.line === range.end.line - 1
+      ) {
+        // Move the cursor back to the middle
+        const position = range.start.translate(1, 2);
+        inlineEdit.editor.selection = new vscode.Selection(position, position);
+      }
+    });
+
+    inlineEdit.disposables.push(cursorListener);
   }
 
   count() {
@@ -421,7 +514,11 @@ class InlineEditManager {
 
   private remove(inlineEdit: InlineEdit) {
     this.edits = this.edits.filter((edit) => edit !== inlineEdit);
-    inlineEdit.editor.setDecorations(inlineEdit.decorationType, []);
+    for (const decorationType of inlineEdit.decorationTypes) {
+      inlineEdit.editor.setDecorations(decorationType, []);
+      decorationType.dispose();
+    }
+
     inlineEdit.editor.setDecorations(inlineEdit.highlightDecorationType, []);
 
     // Remove the inserted text
