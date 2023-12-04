@@ -78,7 +78,7 @@ async function addEntireFileToContext(filepath: vscode.Uri, edit: boolean) {
 const commandsMap: { [command: string]: (...args: any) => any } = {
   "continue.acceptDiff": (...args) => {
     if (inlineEditManager.count() > 0) {
-      inlineEditManager.enter();
+      // inlineEditManager.enter();
     } else {
       acceptDiffCommand(...args);
     }
@@ -259,127 +259,10 @@ const commandsMap: { [command: string]: (...args: any) => any } = {
     );
   },
   "continue.type": async () => {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      return;
-    }
-    const previousFileContents = editor.document.getText();
-
-    // Highlight the selected range with a decoration
-    const originalRange = editor.selection;
-    const highlightDecorationType =
-      vscode.window.createTextEditorDecorationType({
-        backgroundColor: "#eee2",
-        isWholeLine: true,
-      });
-    if (!editor.selection.isEmpty) {
-      editor.setDecorations(highlightDecorationType, [originalRange]);
-    }
-    const decorationTypes = [highlightDecorationType];
-
-    // Select as context item
-    addHighlightedCodeToContext(true);
-
-    // Add a `` and insert the cursor in the middle
-    const startOfLine = new vscode.Position(editor.selection.start.line, 0);
-    editor.edit((editBuilder) => {
-      editBuilder.insert(startOfLine, "`\n  \n`;\n");
-    });
-    let position = startOfLine.translate(1, 2);
-    editor.selection = new vscode.Selection(position, position);
-
-    // Add text via a decoration
-    const decorationType = createSvgDecorationType(1, true);
-    decorationTypes.push(decorationType);
-    editor.setDecorations(decorationType, [
-      new vscode.Range(position.translate(-1, 0), position.translate(0, 0)),
-    ]);
-
-    const endLineDecorationType = vscode.window.createTextEditorDecorationType({
-      before: {
-        // contentText: "⌘ ⇧ ⏎ to edit, esc to cancel",
-        // contentIconPath: vscode.Uri.file(
-        //   path.join(__dirname, "..", "media", "test.svg")
-        // ),
-        margin: "0 0 4em 0",
-        color: "#8888",
-      },
-      // backgroundColor: "#eee2",
-      isWholeLine: true,
-      color: "transparent",
-      cursor: "default",
-    });
-    decorationTypes.push(endLineDecorationType);
-    editor.setDecorations(endLineDecorationType, [
-      new vscode.Range(position.translate(1, 0), position.translate(1, 0)),
-    ]);
-
-    const startLine = position.line - 1;
-
-    // Add a listener to revert any edits made to the boundary lines
-    // Timeout so the initial creation of the zone isn't counted
-    setTimeout(() => {
-      const editListener = vscode.workspace.onDidChangeTextDocument((e) => {
-        if (e.document !== editor.document) {
-          return;
-        }
-
-        for (const change of e.contentChanges) {
-          // The editBuilder.replace will trigger another onDidChangeTextDocument event, so we need to filter these out
-          // False positives are okay
-          if (change.text === "`" || change.text === "`;") {
-            continue;
-          }
-
-          // Check if the boundary line is included in the edit at all
-          const start = change.range.start;
-          const end = change.range.end;
-          if (start.line <= startLine && end.line >= startLine) {
-            // Revert the start line to its original state
-            editor.edit((editBuilder) => {
-              editBuilder.replace(
-                new vscode.Range(startLine, 0, startLine, 1000),
-                "`"
-              );
-            });
-          }
-
-          // TODO: Need to truly keep track of the endline and startline, because they BOTH could move (just more often a problem with the endline)
-          // if (start.line <= endLine && end.line >= endLine) {
-          //   // Revert the end line to its original state
-          //   editor.edit((editBuilder) => {
-          //     editBuilder.replace(
-          //       new vscode.Range(endLine, 0, endLine, 1000),
-          //       "`;"
-          //     );
-          //   });
-          // }
-        }
-        const contentsOfFirstLine = editor.document.lineAt(startLine + 1).text;
-        if (contentsOfFirstLine === "" || contentsOfFirstLine === " ") {
-          // If the space was removed from the start of the line, put it back
-          editor.edit((editBuilder) => {
-            editBuilder.insert(new vscode.Position(startLine + 1, 0), "  ");
-          });
-        }
-      });
-
-      const disposables = [editListener];
-
-      inlineEditManager.add({
-        startLine,
-        decorationTypes,
-        editor,
-        highlightDecorationType,
-        previousFileContents,
-        disposables,
-        lineCount: 1,
-        focused: true,
-      });
-    }, 100);
+    inlineEditManager.new();
   },
   "continue.clearInlineEdit": () => {
-    inlineEditManager.removeAll();
+    inlineEditManager.remove(vscode.window.activeTextEditor);
   },
 };
 
@@ -412,96 +295,210 @@ function createSvgDecorationType(lineCount: number, focused: boolean) {
   });
 }
 
-interface InlineEdit {
-  startLine: number;
-  decorationTypes: vscode.TextEditorDecorationType[];
-  highlightDecorationType: vscode.TextEditorDecorationType;
-  editor: vscode.TextEditor;
-  previousFileContents: string;
-  disposables: vscode.Disposable[];
-  lineCount: number;
-  focused: boolean;
-}
+class InlineEdit extends vscode.Disposable {
+  private autocompleteWasEnabled: boolean | undefined;
+  public startLine: number;
+  public previousFileContents: string;
+  public disposables: vscode.Disposable[] = [];
+  public lineCount: number;
+  public focused: boolean;
 
-// Only allow one per editor
-class InlineEditManager {
-  private edits: InlineEdit[] = [];
+  public highlightDecorationType: vscode.TextEditorDecorationType;
+  public svgDecorationType: vscode.TextEditorDecorationType;
+  public endLineDecorationType: vscode.TextEditorDecorationType;
 
-  updateSvgDecorationType(
-    inlineEdit: InlineEdit,
-    lineCount: number,
-    focused: boolean
-  ) {
-    inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], []);
-    const range = this.findRange(inlineEdit);
-    inlineEdit.decorationTypes[1] = createSvgDecorationType(lineCount, focused);
-    inlineEdit.editor.setDecorations(inlineEdit.decorationTypes[1], [
-      new vscode.Range(range.start, range.start.translate(lineCount, 0)),
-    ]);
-
-    inlineEdit.lineCount = lineCount;
-    inlineEdit.focused = focused;
+  get decorationTypes() {
+    return [
+      this.highlightDecorationType,
+      this.svgDecorationType,
+      this.endLineDecorationType,
+    ];
   }
 
-  add(inlineEdit: InlineEdit) {
-    this.edits.push(inlineEdit);
+  private static _setAutocompleteEnabled(
+    enabled: boolean | undefined
+  ): boolean | undefined {
+    const config = vscode.workspace.getConfiguration("github.copilot");
+    const wasEnabled = config.get<boolean>("editor.enableAutoCompletions");
+    config.update(
+      "editor.enableAutoCompletions",
+      enabled,
+      vscode.ConfigurationTarget.Global
+    );
+    return wasEnabled;
+  }
+
+  constructor(public editor: vscode.TextEditor) {
+    super(() => {
+      this.customDispose();
+    });
+    // Disable GH Copilot while inside the edit box
+    this.autocompleteWasEnabled = InlineEdit._setAutocompleteEnabled(false);
+    this.lineCount = 1;
+    this.focused = true;
+    this.previousFileContents = editor.document.getText();
+
+    // Highlight the selected range with a decoration
+    const originalRange = editor.selection;
+    this.highlightDecorationType = vscode.window.createTextEditorDecorationType(
+      {
+        backgroundColor: "#eee2",
+        isWholeLine: true,
+      }
+    );
+    if (!editor.selection.isEmpty) {
+      editor.setDecorations(this.highlightDecorationType, [originalRange]);
+    }
+
+    // Select as context item
+    addHighlightedCodeToContext(true);
+
+    // Add a `` and insert the cursor in the middle
+    const startOfLine = new vscode.Position(editor.selection.start.line, 0);
+    editor.edit((editBuilder) => {
+      editBuilder.insert(startOfLine, "`\n  \n`;\n");
+    });
+    let position = startOfLine.translate(1, 2);
+    editor.selection = new vscode.Selection(position, position);
+
+    // Add text via a decoration
+    this.svgDecorationType = createSvgDecorationType(1, true);
+    editor.setDecorations(this.svgDecorationType, [
+      new vscode.Range(position.translate(-1, 0), position.translate(0, 0)),
+    ]);
+
+    this.endLineDecorationType = vscode.window.createTextEditorDecorationType({
+      before: {
+        // contentText: "⌘ ⇧ ⏎ to edit, esc to cancel",
+        margin: "0 0 4em 0",
+        color: "#8888",
+      },
+      isWholeLine: true,
+      color: "transparent",
+    });
+    editor.setDecorations(this.endLineDecorationType, [
+      new vscode.Range(position.translate(1, 0), position.translate(1, 0)),
+    ]);
+
+    this.startLine = position.line - 1;
+
+    // Add a listener to revert any edits made to the boundary lines
+    // Timeout so the initial creation of the zone isn't counted
+    setTimeout(() => {
+      const editListener = vscode.workspace.onDidChangeTextDocument((e) => {
+        if (e.document !== editor.document) {
+          return;
+        }
+
+        for (const change of e.contentChanges) {
+          // The editBuilder.replace will trigger another onDidChangeTextDocument event, so we need to filter these out
+          // False positives are okay
+          if (change.text === "`" || change.text === "`;") {
+            continue;
+          }
+
+          // Check if the boundary line is included in the edit at all
+          const start = change.range.start;
+          const end = change.range.end;
+          if (start.line <= this.startLine && end.line >= this.startLine) {
+            // Revert the start line to its original state
+            editor.edit((editBuilder) => {
+              editBuilder.replace(
+                new vscode.Range(this.startLine, 0, this.startLine, 1000),
+                "`"
+              );
+            });
+          }
+
+          // TODO: Need to truly keep track of the endline and startline, because they BOTH could move (just more often a problem with the endline)
+          // if (start.line <= endLine && end.line >= endLine) {
+          //   // Revert the end line to its original state
+          //   editor.edit((editBuilder) => {
+          //     editBuilder.replace(
+          //       new vscode.Range(endLine, 0, endLine, 1000),
+          //       "`;"
+          //     );
+          //   });
+          // }
+        }
+        const contentsOfFirstLine = editor.document.lineAt(
+          this.startLine + 1
+        ).text;
+        if (contentsOfFirstLine === "" || contentsOfFirstLine === " ") {
+          // If the space was removed from the start of the line, put it back
+          editor.edit((editBuilder) => {
+            editBuilder.insert(
+              new vscode.Position(this.startLine + 1, 0),
+              "  "
+            );
+          });
+        }
+      });
+
+      const disposables = [editListener];
+    });
 
     // Add listener for when number of lines changes
     const lineCountListener = vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document !== inlineEdit.editor.document) {
+      if (e.document !== this.editor.document) {
         return;
       }
 
-      const range = this.findRange(inlineEdit);
+      const range = this.findRange();
       const lineCount = range.end.line - range.start.line - 2;
 
-      if (lineCount !== inlineEdit.lineCount) {
+      if (lineCount !== this.lineCount) {
         // Update the decoration
-        this.updateSvgDecorationType(inlineEdit, lineCount, true);
+        this.updateSvgDecorationType(lineCount, true);
       }
     });
 
-    inlineEdit.disposables.push(lineCountListener);
+    this.disposables.push(lineCountListener);
 
     const cursorListener = vscode.window.onDidChangeTextEditorSelection((e) => {
       // Add listener for when the user puts their cursor on a boundary line (and move back to middle)
-      if (e.textEditor !== inlineEdit.editor) {
+      if (e.textEditor !== this.editor) {
         return;
       }
 
       const selection = e.selections[0];
-      const range = this.findRange(inlineEdit);
+      const range = this.findRange();
       if (
         selection.active.line === range.start.line ||
         selection.active.line === range.end.line - 1
       ) {
         // Move the cursor back to the middle
         const position = range.start.translate(1, 2);
-        inlineEdit.editor.selection = new vscode.Selection(position, position);
+        this.editor.selection = new vscode.Selection(position, position);
       }
 
       // Also listen for when the box is focused / blurred
-      const focused = this.findRange(inlineEdit).contains(selection.active);
-      if (focused !== inlineEdit.focused) {
-        this.updateSvgDecorationType(inlineEdit, inlineEdit.lineCount, focused);
+      const focused = this.findRange().contains(selection.active);
+      if (focused !== this.focused) {
+        this.updateSvgDecorationType(this.lineCount, focused);
       }
     });
 
-    inlineEdit.disposables.push(cursorListener);
+    this.disposables.push(cursorListener);
+
+    // Disable tab-autocomplete
+    const config = vscode.workspace.getConfiguration("github.copilot");
+    const enabled = config.get<string[]>("editor.enableAutoCompletions");
+    config.update(
+      "editor.enableAutoCompletions",
+      false,
+      vscode.ConfigurationTarget.Global
+    );
   }
 
-  count() {
-    return this.edits.length;
-  }
-
-  private findRange(inlineEdit: InlineEdit) {
-    const startPos = new vscode.Position(inlineEdit.startLine, 0);
+  findRange() {
+    const startPos = new vscode.Position(this.startLine, 0);
 
     // Find the end line
     let endPos = startPos;
     while (
-      endPos.line < inlineEdit.editor.document.lineCount &&
-      inlineEdit.editor.document.lineAt(endPos.line).text !== "`;"
+      endPos.line < this.editor.document.lineCount &&
+      this.editor.document.lineAt(endPos.line).text !== "`;"
     ) {
       endPos = endPos.translate(1, 0);
     }
@@ -510,53 +507,86 @@ class InlineEditManager {
     return new vscode.Range(startPos, endPos);
   }
 
-  async enter() {
-    const edit = this.edits[0];
+  customDispose() {
+    InlineEdit._setAutocompleteEnabled(this.autocompleteWasEnabled);
 
-    // Get the text
-    const fullRange = this.findRange(edit);
-    const range = new vscode.Range(
-      fullRange.start.translate(1, 0),
-      fullRange.end.translate(-1, 0)
-    );
-    const text = edit.editor.document.getText(range).trim();
-    ideProtocolClient.sendMainUserInput("/edit " + text);
-
-    this.removeAll();
-  }
-
-  private remove(inlineEdit: InlineEdit) {
-    this.edits = this.edits.filter((edit) => edit !== inlineEdit);
-    for (const decorationType of inlineEdit.decorationTypes) {
-      inlineEdit.editor.setDecorations(decorationType, []);
+    for (const decorationType of this.decorationTypes) {
+      this.editor.setDecorations(decorationType, []);
       decorationType.dispose();
     }
 
-    inlineEdit.editor.setDecorations(inlineEdit.highlightDecorationType, []);
+    this.editor.setDecorations(this.highlightDecorationType, []);
 
     // Remove the inserted text
-    inlineEdit.editor.edit((editBuilder) => {
-      editBuilder.delete(this.findRange(inlineEdit));
+    this.editor.edit((editBuilder) => {
+      editBuilder.delete(this.findRange());
     });
 
     // If the file contents are the same as original, save the file, because it's annoying to have to save it manually
     setTimeout(() => {
-      const fileContents = inlineEdit.editor.document.getText();
-      if (fileContents === inlineEdit.previousFileContents) {
-        inlineEdit.editor.document.save();
+      const fileContents = this.editor.document.getText();
+      if (fileContents === this.previousFileContents) {
+        this.editor.document.save();
       }
     }, 100);
 
     // Dispose of the listeners
-    for (const disposable of inlineEdit.disposables) {
+    for (const disposable of this.disposables) {
       disposable.dispose();
     }
+    super.dispose();
   }
 
-  removeAll() {
-    for (const edit of this.edits) {
-      this.remove(edit);
+  async enter() {
+    // Get the text
+    const fullRange = this.findRange();
+    const range = new vscode.Range(
+      fullRange.start.translate(1, 0),
+      fullRange.end.translate(-1, 0)
+    );
+    const text = this.editor.document.getText(range).trim();
+    ideProtocolClient.sendMainUserInput("/edit " + text);
+
+    this.dispose();
+  }
+
+  updateSvgDecorationType(lineCount: number, focused: boolean) {
+    this.editor.setDecorations(this.decorationTypes[1], []);
+    const range = this.findRange();
+    this.decorationTypes[1] = createSvgDecorationType(lineCount, focused);
+    this.editor.setDecorations(this.decorationTypes[1], [
+      new vscode.Range(range.start, range.start.translate(lineCount, 0)),
+    ]);
+
+    this.lineCount = lineCount;
+    this.focused = focused;
+  }
+}
+
+// Only allow one per editor
+class InlineEditManager {
+  private edits: Map<vscode.TextEditor, InlineEdit> = new Map();
+
+  new() {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
     }
+
+    const inlineEdit = new InlineEdit(editor);
+    this.edits.set(editor, inlineEdit);
+  }
+
+  count() {
+    return this.edits.size;
+  }
+
+  remove(editor?: vscode.TextEditor) {
+    if (!editor) {
+      return;
+    }
+    this.edits.get(editor)?.dispose();
+    this.edits.delete(editor);
   }
 }
 
