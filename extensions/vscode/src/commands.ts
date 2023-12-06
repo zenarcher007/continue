@@ -438,12 +438,12 @@ class InlineEdit extends vscode.Disposable {
       const disposables = [editListener];
     });
 
-    // Add listener for when number of lines changes
     const lineCountListener = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document !== this.editor.document) {
         return;
       }
 
+      // Add listener for when number of lines changes
       const range = this.findRange();
       const lineCount = range.end.line - range.start.line - 2;
 
@@ -456,11 +456,11 @@ class InlineEdit extends vscode.Disposable {
     this.disposables.push(lineCountListener);
 
     const cursorListener = vscode.window.onDidChangeTextEditorSelection((e) => {
-      // Add listener for when the user puts their cursor on a boundary line (and move back to middle)
       if (e.textEditor !== this.editor) {
         return;
       }
 
+      // Add listener for when the user puts their cursor on a boundary line (and move back to middle)
       const selection = e.selections[0];
       const range = this.findRange();
       if (
@@ -470,6 +470,53 @@ class InlineEdit extends vscode.Disposable {
         // Move the cursor back to the middle
         const position = range.start.translate(1, 2);
         this.editor.selection = new vscode.Selection(position, position);
+      }
+
+      // If cursor is in the margins, move it to the fake start of the line
+      if (
+        range.contains(selection.active) &&
+        selection.isEmpty &&
+        selection.active.character < 2
+      ) {
+        // Read the active line
+        const activeLineContents = this.editor.document.lineAt(
+          selection.active.line
+        ).text;
+
+        if (
+          activeLineContents === "" &&
+          range.start.line !== selection.active.line
+        ) {
+          // Deletion, remove the line and move to the above
+          editor.edit((editBuilder) => {
+            editBuilder.delete(
+              new vscode.Range(
+                selection.active.line,
+                0,
+                selection.active.line + 1,
+                0
+              )
+            );
+          });
+          const lineAboveLength = this.editor.document.lineAt(
+            selection.active.line - 1
+          ).text.length;
+          this.editor.selection = new vscode.Selection(
+            selection.active.line - 1,
+            lineAboveLength,
+            selection.active.line - 1,
+            lineAboveLength
+          );
+        } else {
+          // Cursor just moved, move it to start of the line
+          if (selection.active.line !== range.end.line - 1) {
+            const position = selection.active.translate(
+              0,
+              2 - selection.active.character
+            );
+            this.editor.selection = new vscode.Selection(position, position);
+          }
+        }
       }
 
       // Also listen for when the box is focused / blurred
@@ -551,13 +598,12 @@ class InlineEdit extends vscode.Disposable {
   }
 
   updateSvgDecorationType(lineCount: number, focused: boolean) {
-    this.editor.setDecorations(this.decorationTypes[1], []);
+    this.editor.setDecorations(this.svgDecorationType, []);
     const range = this.findRange();
-    this.decorationTypes[1] = createSvgDecorationType(lineCount, focused);
-    this.editor.setDecorations(this.decorationTypes[1], [
+    this.svgDecorationType = createSvgDecorationType(lineCount, focused);
+    this.editor.setDecorations(this.svgDecorationType, [
       new vscode.Range(range.start, range.start.translate(lineCount, 0)),
     ]);
-
     this.lineCount = lineCount;
     this.focused = focused;
   }
