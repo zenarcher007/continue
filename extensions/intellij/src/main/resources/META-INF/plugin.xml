@@ -13,13 +13,4 @@
 
     <resource-bundle>messages.MyBundle</resource-bundle>
 
-    <extensions defaultExtensionNs="com.intellij">
-        <postStartupActivity
-                implementation="com.github.continuedev.continueintellijextension.activities.ContinuePluginStartupActivity"/>
-    </extensions>
-
-    <actions>
-    </actions>
-
-
 </idea-plugin>
