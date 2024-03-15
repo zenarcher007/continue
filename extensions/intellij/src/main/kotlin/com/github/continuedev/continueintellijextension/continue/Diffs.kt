@@ -1,6 +1,5 @@
 package com.github.continuedev.continueintellijextension.`continue`
 
-import com.github.continuedev.continueintellijextension.services.ContinuePluginService
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.DiffRequestPanel
@@ -89,13 +88,6 @@ class DiffManager(private val project: Project): DumbAware {
         }
         FileDocumentManager.getInstance().saveDocument(document)
 
-        // Notify server of acceptance
-        val continuePluginService = ServiceManager.getService(
-                project,
-                ContinuePluginService::class.java
-        )
-        continuePluginService.ideProtocolClient?.sendAcceptRejectDiff(true, diffInfo.stepIndex)
-
         // Clean up state
         cleanUpFile(file)
     }
@@ -103,12 +95,6 @@ class DiffManager(private val project: Project): DumbAware {
     fun rejectDiff(file2: String?) {
         val file = (file2 ?: lastFile2) ?: return
         val diffInfo = diffInfoMap[file] ?: return
-        val continuePluginService = ServiceManager.getService(
-                project,
-                ContinuePluginService::class.java
-        )
-        continuePluginService.ideProtocolClient?.deleteAtIndex(diffInfo.stepIndex)
-        continuePluginService.ideProtocolClient?.sendAcceptRejectDiff(false, diffInfo.stepIndex)
 
         cleanUpFile(file)
     }

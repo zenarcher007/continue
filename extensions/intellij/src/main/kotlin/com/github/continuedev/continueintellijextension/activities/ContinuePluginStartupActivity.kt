@@ -2,9 +2,6 @@ package com.github.continuedev.continueintellijextension.activities
 
 import com.github.continuedev.continueintellijextension.constants.getContinueGlobalPath
 import com.github.continuedev.continueintellijextension.`continue`.*
-import com.github.continuedev.continueintellijextension.services.ContinueExtensionSettings
-import com.github.continuedev.continueintellijextension.services.ContinuePluginService
-import com.github.continuedev.continueintellijextension.services.SettingsListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.application.ApplicationManager
@@ -138,58 +135,14 @@ class ContinuePluginStartupActivity : StartupActivity, Disposable, DumbAware {
     }
 
     private fun initializePlugin(project: Project) {
-        val continuePluginService = ServiceManager.getService(
-            project,
-            ContinuePluginService::class.java
-        )
 
         val theme = GetTheme().getTheme()
 
         val defaultStrategy = DefaultTextSelectionStrategy()
 
         coroutineScope.launch {
-            val settings =
-                    ServiceManager.getService(ContinueExtensionSettings::class.java)
-            if (!settings.continueState.shownWelcomeDialog) {
-                settings.continueState.shownWelcomeDialog = true
-                // Open continue_tutorial.py
-                showTutorial(project)
-
-                // Show the welcome dialog
-//                withContext(Dispatchers.Main) {
-//                    val dialog = WelcomeDialogWrapper(project)
-//                    dialog.show()
-//                }
-//                settings.continueState.shownWelcomeDialog = true
-            }
-
-            val ideProtocolClient = IdeProtocolClient(
-                    continuePluginService,
-                    defaultStrategy,
-                    coroutineScope,
-                    project.basePath,
-                    project
-            )
-
-            continuePluginService.ideProtocolClient = ideProtocolClient
-
-
-
-            ApplicationManager.getApplication().messageBus.connect().subscribe(SettingsListener.TOPIC, object : SettingsListener {
-                override fun settingsUpdated(settings: ContinueExtensionSettings.ContinueState) {
-                    continuePluginService.coreMessenger?.request("config/ideSettingsUpdate", settings, null) { _ -> }
-                }
-            })
-
             GlobalScope.async(Dispatchers.IO) {
                 // Reload the WebView
-                continuePluginService?.let {
-                    val workspacePaths =
-                            if (project.basePath != null) arrayOf(project.basePath) else emptyList<String>()
-
-                    continuePluginService.workspacePaths = workspacePaths as Array<String>
-                }
-
                 try {
                     startProxyServer()
                 } catch (e: Exception) {
@@ -239,9 +192,6 @@ class ContinuePluginStartupActivity : StartupActivity, Disposable, DumbAware {
 
                 // esbuild needs permissions
                 val esbuildPath = Paths.get(targetPath, "esbuild"+ (if (os == "win32") ".exe" else "")).toString()
-
-                val coreMessenger = CoreMessenger(esbuildPath, continueCorePath, ideProtocolClient);
-                continuePluginService.coreMessenger = coreMessenger
             }
         }
     }

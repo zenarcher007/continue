@@ -1,8 +1,6 @@
 package com.github.continuedev.continueintellijextension.`continue`
 
 import com.github.continuedev.continueintellijextension.constants.*
-import com.github.continuedev.continueintellijextension.services.ContinueExtensionSettings
-import com.github.continuedev.continueintellijextension.services.ContinuePluginService
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
@@ -106,7 +104,6 @@ class AsyncFileSaveListener : AsyncFileListener {
 }
 
 class IdeProtocolClient (
-    private val continuePluginService: ContinuePluginService,
     private val textSelectionStrategy: TextSelectionStrategy,
     private val coroutineScope: CoroutineScope,
     private val workspacePath: String?,
@@ -125,7 +122,6 @@ class IdeProtocolClient (
 
     private fun send(messageType: String, data: Any?, messageId: String? = null) {
         val id = messageId ?: uuid()
-        continuePluginService.sendToWebview(messageType, data, id)
     }
 
     fun handleMessage(text: String, respond: (Any?) -> Unit) {
@@ -149,13 +145,6 @@ class IdeProtocolClient (
                         mapOf("uniqueId" to uniqueId())
                     )
                     "getIdeSettings" -> {
-                        val settings =
-                                ServiceManager.getService(ContinueExtensionSettings::class.java)
-                        respond(mapOf(
-                            "remoteConfigServerUrl" to settings.continueState.remoteConfigServerUrl,
-                            "remoteConfigSyncPeriod" to settings.continueState.remoteConfigSyncPeriod,
-                            "userToken" to settings.continueState.userToken
-                        ))
                     }
                     "getIdeInfo" -> {
                         val applicationInfo = ApplicationInfo.getInstance()
@@ -446,7 +435,6 @@ class IdeProtocolClient (
     }
 
     fun configUpdate() {
-        continuePluginService.coreMessenger?.request("config/reload", null, null) { _ -> }
     }
 
     private fun editConfigJson(callback: (config: MutableMap<String, Any>) -> Map<String, Any>): Map<String, Any> {
@@ -486,7 +474,6 @@ class IdeProtocolClient (
         )
 
         val windowInfo = mapOf(
-            "window_id" to continuePluginService.windowId,
             "unique_id" to uniqueId(),
             "ide_info" to IDEInfo(
                 name = ideName,
@@ -590,17 +577,9 @@ class IdeProtocolClient (
 //                edit
 //        ))
 
-        continuePluginService.sendToWebview(
-"highlightedCode",
-           mapOf(
-                "rangeInFileWithContents" to rif,
-                "edit" to edit
-            )
-        )
     }
 
     fun sendMainUserInput(input: String) {
-        continuePluginService.sendToWebview("userInput", mapOf("input" to input))
     }
 
     fun sendAcceptRejectDiff(accepted: Boolean, stepIndex: Int) {

@@ -4,7 +4,6 @@ import com.github.continuedev.continueintellijextension.activities.showTutorial
 import com.github.continuedev.continueintellijextension.constants.getConfigJsonPath
 import com.github.continuedev.continueintellijextension.`continue`.*
 import com.github.continuedev.continueintellijextension.factories.CustomSchemeHandlerFactory
-import com.github.continuedev.continueintellijextension.services.ContinuePluginService
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -92,12 +91,6 @@ class ContinuePluginToolWindowFactory : ToolWindowFactory, DumbAware {
 //            browser.loadURL("http://localhost:5173/index.html")
             Disposer.register(project, browser)
 
-            val continuePluginService = ServiceManager.getService(
-                    project,
-                    ContinuePluginService::class.java
-            )
-            continuePluginService.continuePluginWindow = this
-
             // Listen for events sent from browser
             val myJSQueryOpenInBrowser = JBCefJSQuery.create((browser as JBCefBrowserBase?)!!)
             myJSQueryOpenInBrowser.addHandler { msg: String? ->
@@ -107,20 +100,12 @@ class ContinuePluginToolWindowFactory : ToolWindowFactory, DumbAware {
                 val data = json.get("data")
                 val messageId = json.get("messageId")?.asString
 
-                val ide = continuePluginService.ideProtocolClient;
 
                 val respond = fun(data: Any?) {
-                    val jsonData = mutableMapOf(
-                        "messageId" to messageId,
-                        "data" to data,
-                        "messageType" to messageType
-                    )
-                    val jsonString = Gson().toJson(jsonData)
-                    continuePluginService.sendToWebview(messageType, data, messageId ?: uuid())
+
                 }
 
                 if (PASS_THROUGH_TO_CORE.contains(messageType)) {
-                    continuePluginService.coreMessenger?.request(messageType, data, messageId, respond)
                     return@addHandler null
                 }
 
@@ -129,66 +114,32 @@ class ContinuePluginToolWindowFactory : ToolWindowFactory, DumbAware {
                         GlobalScope.launch {
                             // Set the colors to match Intellij theme
                             val colors = GetTheme().getTheme();
-                            continuePluginService.sendToWebview("setColors", colors)
-
-                            val jsonData = mutableMapOf(
-                                    "windowId" to continuePluginService.windowId,
-                                    "workspacePaths" to continuePluginService.workspacePaths,
-                                    "vscMachineId" to getMachineUniqueID(),
-                                    "vscMediaUrl" to "http://continue",
-                            )
-                            respond(jsonData)
                         }
 
                     }
                     "showLines" -> {
                         val data = data.asJsonObject
-                        ide?.highlightCode(RangeInFile(
-                                data.get("filepath").asString,
-                                Range(Position(
-                                        data.get("start").asInt,
-                                        0
-                                ), Position(
-                                        data.get("end").asInt,
-                                        0
-                                )),
-
-                        ),"#00ff0022")
                     }
                     "showTutorial" -> {
                         showTutorial(project)
                     }
                     "showVirtualFile" -> {
                         val data = data.asJsonObject
-                        ide?.showVirtualFile(data.get("name").asString, data.get("content").asString)
                     }
                     "showFile" -> {
                         val data = data.asJsonObject
-                        ide?.setFileOpen(data.get("filepath").asString)
                     }
                     "reloadWindow" -> {}
                     "openConfigJson" -> {
-                        ide?.setFileOpen(getConfigJsonPath())
                     }
                     "readRangeInFile" -> {
                         val data = data.asJsonObject
-                        ide?.readRangeInFile(RangeInFile(
-                                data.get("filepath").asString,
-                                Range(Position(
-                                        data.get("start").asInt,
-                                        0
-                                ), Position(
-                                        data.get("end").asInt + 1,
-                                        0
-                                )),
-                        ))
                     }
                     "focusEditor" -> {}
 
                     // IDE //
                     else -> {
                         if (msg != null) {
-                            ide?.handleMessage(msg, respond)
                         }
                     }
                 }
