@@ -1,14 +1,10 @@
 package com.github.continuedev.continueintellijextension.toolWindow
 
-import com.github.continuedev.continueintellijextension.activities.showTutorial
 import com.github.continuedev.continueintellijextension.factories.CustomSchemeHandlerFactory
-import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.components.ServiceManager
-import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -22,9 +18,6 @@ import org.cef.CefApp
 import org.cef.browser.CefBrowser
 import org.cef.handler.CefLoadHandlerAdapter
 import javax.swing.*
-import kotlin.math.max
-import kotlin.math.min
-
 
 const val JS_QUERY_POOL_SIZE = "200"
 
@@ -118,7 +111,6 @@ class ContinuePluginToolWindowFactory : ToolWindowFactory, DumbAware {
                         val data = data.asJsonObject
                     }
                     "showTutorial" -> {
-                        showTutorial(project)
                     }
                     "showVirtualFile" -> {
                         val data = data.asJsonObject
