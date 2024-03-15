@@ -2,7 +2,6 @@ package com.github.continuedev.continueintellijextension.activities
 
 import com.github.continuedev.continueintellijextension.constants.getContinueGlobalPath
 import com.github.continuedev.continueintellijextension.`continue`.*
-import com.github.continuedev.continueintellijextension.listeners.ContinuePluginSelectionListener
 import com.github.continuedev.continueintellijextension.services.ContinueExtensionSettings
 import com.github.continuedev.continueintellijextension.services.ContinuePluginService
 import com.github.continuedev.continueintellijextension.services.SettingsListener
@@ -183,12 +182,6 @@ class ContinuePluginStartupActivity : StartupActivity, Disposable, DumbAware {
             })
 
             GlobalScope.async(Dispatchers.IO) {
-                val listener =
-                        ContinuePluginSelectionListener(
-                                ideProtocolClient,
-                                coroutineScope
-                        )
-
                 // Reload the WebView
                 continuePluginService?.let {
                     val workspacePaths =
@@ -196,11 +189,6 @@ class ContinuePluginStartupActivity : StartupActivity, Disposable, DumbAware {
 
                     continuePluginService.workspacePaths = workspacePaths as Array<String>
                 }
-
-                EditorFactory.getInstance().eventMulticaster.addSelectionListener(
-                        listener,
-                        this@ContinuePluginStartupActivity
-                )
 
                 try {
                     startProxyServer()
