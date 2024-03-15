@@ -1,6 +1,4 @@
 package com.github.continuedev.continueintellijextension.`continue`
-import com.github.continuedev.continueintellijextension.constants.getSessionFilePath
-import com.github.continuedev.continueintellijextension.constants.getSessionsListPath
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
@@ -14,7 +12,7 @@ class HistoryManager {
     private val gson = Gson()
 
     fun list(): List<PersistedSessionInfo> {
-        val filePath = getSessionsListPath()
+        val filePath = "~/.continue/sessions/sessions.json"
         val file = File(filePath)
 
         if (!file.exists()) {
@@ -29,7 +27,7 @@ class HistoryManager {
     }
 
     fun delete(sessionId: String) {
-        val sessionFile = getSessionFilePath(sessionId)
+        val sessionFile = "~/.continue/sessions/$sessionId.json"
         val file = File(sessionFile)
 
         if (!file.exists()) {
@@ -37,7 +35,7 @@ class HistoryManager {
         }
 
         file.delete()
-        val sessionsListFile = getSessionsListPath()
+        val sessionsListFile = "~/.continue/sessions/sessions.json"
         val sessionsListRaw = FileReader(File(sessionsListFile))
 
         val type: Type = object : TypeToken<List<SessionInfo>>() {}.type
@@ -51,7 +49,7 @@ class HistoryManager {
     }
 
     fun load(sessionId: String): PersistedSessionInfo {
-        val sessionFile = getSessionFilePath(sessionId)
+        val sessionFile = "~/.continue/sessions/$sessionId.json"
         val file = File(sessionFile)
 
         if (!file.exists()) {
@@ -67,39 +65,5 @@ class HistoryManager {
     }
 
     fun save(session: PersistedSessionInfo) {
-        val writer = FileWriter(getSessionFilePath(session["sessionId"] as String? ?: uuid()))
-        gson.toJson(session, writer)
-        writer.close()
-
-        val sessionsListFilePath = getSessionsListPath()
-        val rawSessionsList = FileReader(File(sessionsListFilePath))
-
-        val type: Type = object : TypeToken<List<SessionInfo>>() {}.type
-        val sessionsList = gson.fromJson<List<MutableMap<String, Any>>>(rawSessionsList, type).toMutableList()
-
-        var found = false
-        for (sessionInfo in sessionsList) {
-            if (sessionInfo["sessionId"] == session["sessionId"]) {
-                sessionInfo["title"] = session["title"] as Any
-                sessionInfo["workspaceDirectory"] = session["workspaceDirectory"] as Any
-                sessionInfo["dateCreated"] = System.currentTimeMillis().toString()
-                found = true
-                break
-            }
-        }
-
-        if (!found) {
-            val sessionInfo = mutableMapOf(
-                    "sessionId" to session["sessionId"],
-                    "title" to  session["title"],
-                    "dateCreated" to System.currentTimeMillis().toString(),
-                    "workspaceDirectory" to session["workspaceDirectory"]
-            ) as MutableMap<String, Any>
-            sessionsList.add(sessionInfo)
-        }
-
-        val writerList = FileWriter(sessionsListFilePath)
-        gson.toJson(sessionsList, writerList)
-        writerList.close()
     }
 }

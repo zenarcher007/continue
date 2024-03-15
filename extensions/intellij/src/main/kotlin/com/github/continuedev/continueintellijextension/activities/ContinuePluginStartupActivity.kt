@@ -1,6 +1,5 @@
 package com.github.continuedev.continueintellijextension.activities
 
-import com.github.continuedev.continueintellijextension.constants.getContinueGlobalPath
 import com.github.continuedev.continueintellijextension.`continue`.*
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.KeyboardShortcut
@@ -84,16 +83,7 @@ fun showTutorial(project: Project) {
         if (!System.getProperty("os.name").toLowerCase().contains("mac")) {
             content = content.replace("⌘", "⌃")
         }
-        val filepath = Paths.get(getContinueGlobalPath(), "continue_tutorial.py").toString()
-        File(filepath).writeText(content)
-        val virtualFile = LocalFileSystem.getInstance().findFileByPath(filepath)
 
-
-        ApplicationManager.getApplication().invokeLater {
-            if (virtualFile != null) {
-                FileEditorManager.getInstance(project).openFile(virtualFile, true)
-            }
-        }
     }
 }
 
@@ -135,21 +125,7 @@ class ContinuePluginStartupActivity : StartupActivity, Disposable, DumbAware {
     }
 
     private fun initializePlugin(project: Project) {
-
-        val theme = GetTheme().getTheme()
-
-        val defaultStrategy = DefaultTextSelectionStrategy()
-
         coroutineScope.launch {
-            GlobalScope.async(Dispatchers.IO) {
-                // Reload the WebView
-                try {
-                    startProxyServer()
-                } catch (e: Exception) {
-                    println(e)
-                }
-            }
-
             GlobalScope.async(Dispatchers.IO) {
                 val myPluginId = "com.github.continuedev.continueintellijextension"
                 val pluginDescriptor = PluginManager.getPlugin(PluginId.getId(myPluginId))

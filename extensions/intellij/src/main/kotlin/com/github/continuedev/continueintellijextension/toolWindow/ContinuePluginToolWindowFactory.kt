@@ -1,8 +1,6 @@
 package com.github.continuedev.continueintellijextension.toolWindow
 
 import com.github.continuedev.continueintellijextension.activities.showTutorial
-import com.github.continuedev.continueintellijextension.constants.getConfigJsonPath
-import com.github.continuedev.continueintellijextension.`continue`.*
 import com.github.continuedev.continueintellijextension.factories.CustomSchemeHandlerFactory
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -113,7 +111,6 @@ class ContinuePluginToolWindowFactory : ToolWindowFactory, DumbAware {
                     "onLoad" -> {
                         GlobalScope.launch {
                             // Set the colors to match Intellij theme
-                            val colors = GetTheme().getTheme();
                         }
 
                     }

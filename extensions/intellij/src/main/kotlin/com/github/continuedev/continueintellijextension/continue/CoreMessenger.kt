@@ -10,13 +10,12 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.attribute.PosixFilePermission
 
-class CoreMessenger(esbuildPath: String, continueCorePath: String, ideProtocolClient: IdeProtocolClient) {
+class CoreMessenger(esbuildPath: String, continueCorePath: String) {
     private val writer: OutputStreamWriter
     private val reader: BufferedReader
     private val process: Process
     private val gson = Gson()
     private val responseListeners = mutableMapOf<String, (String) -> Unit>()
-    private val ideProtocolClient = ideProtocolClient
 
     private fun write(message: String) {
         writer.write(message + "\r\n")
@@ -31,14 +30,6 @@ class CoreMessenger(esbuildPath: String, continueCorePath: String, ideProtocolCl
     }
 
     fun request(messageType: String, data: Any?, messageId: String?, onResponse: (String) -> Unit) {
-        val id = messageId ?: uuid()
-        val message = gson.toJson(mapOf(
-                "messageId" to id,
-                "messageType" to messageType,
-                "data" to data
-        ))
-        responseListeners[id] = onResponse
-        write(message)
     }
 
     private fun handleMessage(json: String) {
@@ -49,14 +40,6 @@ class CoreMessenger(esbuildPath: String, continueCorePath: String, ideProtocolCl
 
         // IDE listeners
         if (ideMessageTypes.contains(messageType)) {
-            ideProtocolClient.handleMessage(json) { data ->
-                val message = gson.toJson(mapOf(
-                        "messageId" to messageId,
-                        "messageType" to messageType,
-                        "data" to data
-                ))
-                write(message)
-            };
         }
 
         // Responses for messageId
@@ -150,7 +133,6 @@ class CoreMessenger(esbuildPath: String, continueCorePath: String, ideProtocolCl
 
         process.onExit().thenRun {
             val err = process.errorStream.bufferedReader().readText()
-            ideProtocolClient.showMessage("Core process exited with output: $err")
         }
 
         Thread {
