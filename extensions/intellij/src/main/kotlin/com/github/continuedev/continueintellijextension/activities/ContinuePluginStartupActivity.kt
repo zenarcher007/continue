@@ -1,19 +1,14 @@
 package com.github.continuedev.continueintellijextension.activities
 
-import com.github.continuedev.continueintellijextension.`continue`.*
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.components.ServiceManager
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.keymap.KeymapManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.StartupActivity
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.io.StreamUtil
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.wm.ToolWindowManager
 import kotlinx.coroutines.*
 import java.awt.Dimension
@@ -24,7 +19,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
 import javax.swing.*
-import com.intellij.openapi.application.PathManager;
 import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.extensions.PluginId
 
