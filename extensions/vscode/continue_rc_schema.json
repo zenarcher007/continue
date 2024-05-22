@@ -482,7 +482,7 @@
                   "mistral-8x7b",
                   "claude-3-sonnet-20240229",
                   "claude-3-haiku-20240307",
-                  "starcoder-7b",
+                  "deepseek-6.7b",
                   "AUTODETECT"
                 ]
               }

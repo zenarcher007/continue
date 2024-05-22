@@ -26,6 +26,7 @@ import {
   noFirstCharNewline,
   onlyWhitespaceAfterEndOfLine,
   stopOnUnmatchedClosingBracket,
+  stopOnWords,
 } from "./charStream.js";
 import {
   constructAutocompletePrompt,
@@ -170,10 +171,10 @@ export async function getTabCompletion(
     llm.useLegacyCompletionsEndpoint = true;
   } else if (
     llm.providerName === "free-trial" &&
-    llm.model !== "starcoder-7b"
+    llm.model !== "deepseek-6.7b"
   ) {
     throw new Error(
-      "The only free trial model supported for tab-autocomplete is starcoder-7b.",
+      "The only free trial model supported for tab-autocomplete is deepseek-6.7b.",
     );
   }
 
@@ -349,6 +350,7 @@ export async function getTabCompletion(
     charGenerator = noFirstCharNewline(charGenerator);
     charGenerator = onlyWhitespaceAfterEndOfLine(charGenerator, lang.endOfLine);
     charGenerator = stopOnUnmatchedClosingBracket(charGenerator, suffix);
+    charGenerator = stopOnWords(charGenerator, stop);
 
     let lineGenerator = streamLines(charGenerator);
     lineGenerator = stopAtLines(lineGenerator);

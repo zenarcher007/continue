@@ -29,7 +29,7 @@ export function setupOptimizedMode(
     tabAutocompleteModel: {
       title: "Tab Autocomplete",
       provider: "free-trial",
-      model: "starcoder-7b",
+      model: "deepseek-6.7b",
     },
     embeddingsProvider: {
       provider: "free-trial",
@@ -48,7 +48,7 @@ export function setupOptimizedExistingUserMode(
     tabAutocompleteModel: {
       title: "Tab Autocomplete",
       provider: "free-trial",
-      model: "starcoder-7b",
+      model: "deepseek-6.7b",
     },
     embeddingsProvider: {
       provider: "free-trial",

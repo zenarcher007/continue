@@ -1,6 +1,7 @@
 import { ILLM } from "core";
 import { ConfigHandler } from "core/config/handler";
 import Ollama from "core/llm/llms/Ollama";
+import { editConfigJson } from "core/util/paths";
 import * as vscode from "vscode";
 
 export class TabAutocompleteModel {
@@ -82,6 +83,23 @@ export class TabAutocompleteModel {
     if (!this._llm) {
       const config = await this.configHandler.loadConfig();
       if (config.tabAutocompleteModel) {
+        if (
+          config.tabAutocompleteModel.providerName === "free-trial" &&
+          config.tabAutocompleteModel.model === "starcoder-7b"
+        ) {
+          // Migrate to Deepseek Coder
+          config.tabAutocompleteModel.model = "deepseek-6.7b";
+          editConfigJson((config) => {
+            if (!config.tabAutocompleteModel) return config;
+            return {
+              ...config,
+              tabAutocompleteModel: {
+                ...config.tabAutocompleteModel,
+                model: "deepseek-6.7b",
+              },
+            };
+          });
+        }
         this._llm = config.tabAutocompleteModel;
       } else {
         this._llm = await this.getDefaultTabAutocompleteModel();

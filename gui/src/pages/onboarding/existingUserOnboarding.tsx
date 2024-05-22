@@ -82,7 +82,7 @@ function ExistingUserOnboarding() {
   "tabAutocompleteModel": {
     "title": "Tab Autocomplete",
     "provider": "free-trial",
-    "model": "starcoder-7b"
+    "model": "deepseek-6.7b"
   },
   // Voyage AI's voyage-code-2
   "embeddingsProvider": {
@@ -99,7 +99,7 @@ Alternatively, you can enter your own API keys:
 \`\`\`json
 {
   "tabAutocompleteModel": {
-    "title": "Starcoder 2",
+    "title": "Starcoder",
     "provider": "openai",
     "model": "accounts/fireworks/models/starcoder-7b",
     "apiBase": "https://api.fireworks.ai/inference/v1",

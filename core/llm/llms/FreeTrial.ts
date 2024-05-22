@@ -40,7 +40,7 @@ class FreeTrial extends BaseLLM {
       presence_penalty: options.presencePenalty,
       max_tokens: options.maxTokens,
       stop:
-        options.model === "starcoder-7b"
+        options.model === "deepseek-6.7b"
           ? options.stop
           : options.stop?.slice(0, 2),
       temperature: options.temperature,

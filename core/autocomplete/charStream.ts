@@ -76,3 +76,32 @@ export async function* stopOnUnmatchedClosingBracket(
     yield chunk;
   }
 }
+
+export async function* stopOnWords(
+  stream: AsyncGenerator<string>,
+  stopWords: string[],
+): AsyncGenerator<string> {
+  const maxStopWordLen = stopWords.reduce(
+    (maxLength, stopWord) => Math.max(maxLength, stopWord.length),
+    0,
+  );
+
+  let buffer = "";
+  for await (let chunk of stream) {
+    buffer += chunk;
+    for (let stopWord of stopWords) {
+      if (buffer.length >= stopWord.length) {
+        const index = buffer.indexOf(stopWord);
+        if (index !== -1) {
+          yield buffer.slice(0, index);
+          return;
+        }
+      }
+    }
+    if (buffer.length > maxStopWordLen) {
+      yield buffer.slice(0, -maxStopWordLen);
+      buffer = buffer.slice(-maxStopWordLen);
+    }
+  }
+  yield buffer;
+}
