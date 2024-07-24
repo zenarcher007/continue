@@ -1,7 +1,7 @@
 {
   "name": "continue",
   "icon": "media/icon.png",
-  "version": "0.9.185",
+  "version": "0.9.191",
   "repository": {
     "type": "git",
     "url": "https://github.com/continuedev/continue"
@@ -93,6 +93,16 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Pause Continue's tab autocomplete feature when your battery is low."
+        },
+        "continue.pauseCodebaseIndexOnStart": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Pause Continue's codebase index on start."
+        },
+        "continue.enableDebugLogs": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Enable Continue Debug Logs in the Output panel."
         },
         "continue.remoteConfigServerUrl": {
           "type": "string",
@@ -598,6 +608,7 @@
     "uuidv4": "^6.2.13",
     "vectordb": "^0.4.20",
     "vscode-languageclient": "^8.0.2",
+    "web-tree-sitter": "^0.22.6",
     "ws": "^8.13.0",
     "yarn": "^1.22.21"
   }
